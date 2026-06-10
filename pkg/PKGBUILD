@@ -1,0 +1,20 @@
+# Maintainer: Mark Ridgwell <273118822+dnyw4l3n13@users.noreply.github.com>
+# shellcheck shell=bash
+# shellcheck disable=SC2034  # Variables are read externally by makepkg
+# shellcheck disable=SC2154  # srcdir and pkgdir are set by makepkg
+pkgname=ssh-key-mgr
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='POSIX shell script that manages per-host SSH keys and their entries in ~/.ssh/config'
+arch=('any')
+url='https://github.com/credfeto/credfeto-ssh-key-mgr'
+license=('MIT')
+depends=('openssh' 'coreutils')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "${srcdir}/credfeto-${pkgname}-${pkgver}" || exit 1
+    install -Dm755 "${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
