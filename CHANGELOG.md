@@ -12,9 +12,14 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 - PKGBUILD for Arch Linux packaging via makepkg
+- upload subcommand to push an existing key to the key server with challenge-response authentication
 ### Fixed
 - Corrected broken cross-reference in github-workflows.instructions.md — anchor #visual-indicators updated to #output-helpers to match actual section name in shell-scripts.instructions.md
 - shell.firewall.examples.md open_port_for_private_networks no longer calls firewall-cmd --reload internally; added explicit caller-reload rule to shell.firewall.instructions.md
+- die() now correctly writes to stderr so error messages are not captured by stdout pipelines
+- removed spurious debug echo in create subcommand that printed the ssh-keygen command line to stdout
+- IFS='\\n' no-op assignments in alias and revoke subcommands replaced with correct IFS handling
+- removed unused BASEDIR variable
 ### Changed
 - die() must output to stderr so error messages are not swallowed by stdout pipelines
 ### Deprecated
