@@ -25,7 +25,7 @@
 #
 #  ssh-key-mgr revoke --host <host>
 #
-#  ** Moves the old key into .ssh/revoked/<key> and removes the host entry 
+#  ** Moves the old key into .ssh/revoked/<key> and removes the host entry
 #     from the .ssh/config
 #
 #
@@ -45,10 +45,10 @@
 #
 #   ssh-key-mgr use --host <host>
 #  ** Requires ssh-agent to be running -run :
-# 
+#
 #     systemctl enable --now --user ssh-agent.service
 #
-#  ** and make sure SSH_AUTH_SOCK environment variable is set   
+#  ** and make sure SSH_AUTH_SOCK environment variable is set
 #
 #
 # Audit the encryption details of all installed keys
@@ -94,22 +94,37 @@ then
     echo "  PreferredAuthentications=publickey"
     echo ""
     echo "  # Require Identity File"
-    echo "  IdentitiesOnly yes"  
+    echo "  IdentitiesOnly yes"
     echo "  # SSH Agent"
     echo "  AddKeysToAgent no"
     echo ""
 
   } > "$SSH_HOSTS_FILE"
   chmod 600 "$SSH_HOSTS_FILE"
-fi 
+fi
 
 PROG="$(basename "$(readlink -f "$0")")"
-BASEDIR="$(dirname "$(readlink -f "$0")")"
+
 
 die() {
-    echo
-    echo "$@"
+    printf '\n\033[31m✗\033[0m %s\n' "$*" >&2
     exit 1
+}
+
+success() {
+    printf '\n\033[32m✓\033[0m %s\n' "$*"
+}
+
+info() {
+    printf '\n\033[32m→\033[0m %s\n' "$*"
+}
+
+# Returns true (0) when running inside a Claude Code Bash-tool session.
+# Claude Code sets CLAUDECODE=1 in every shell it spawns via the Bash tool;
+# that value is inherited by subprocesses (e.g. git hooks).
+# Source: https://docs.anthropic.com/en/docs/claude-code/settings#environment-variables
+is_ai_agent() {
+    [ "${CLAUDECODE}" = "1" ]
 }
 
 [ -f "/bin/ssh-keygen" ] || die "ssh-keygen not found"
@@ -166,7 +181,7 @@ find_host_file() {
 add_config_host_entry() {
   HOST=$1
   KEY_BASE_NAME=$1
-  
+
   {
     echo "Host $HOST"
     echo "  IdentityFile ~/.ssh/id_$KEY_BASE_NAME"
@@ -193,7 +208,7 @@ create_ssh_key() {
         shift # past value
         ;;
       -c|--comment)
-        COMMENT="$2"        
+        COMMENT="$2"
         shift # past argument
         shift # past value
         ;;
@@ -206,11 +221,11 @@ create_ssh_key() {
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
   [ -z "$COMMENT" ] && COMMENT="$HOST for $USER@$(hostname)"
   [ -z "$COMMENT" ] && die "--comment not specified"
-  
+
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ ! -z "$HOST_FILE_HOST" ] && die "Host already has key"
 
@@ -219,15 +234,14 @@ create_ssh_key() {
   PUBLIC_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME.pub"
   [ -f "$PRIVATE_KEY_FILENAME" ] && die "Private key already exists: $PRIVATE_KEY_FILENAME"
   [ -f "$PUBLIC_KEY_FILENAME" ] && die "Public key already exists: $PUBLIC_KEY_FILENAME"
-  
+
   echo "Creating new SSH key for $HOST"
   echo "Public Key: $PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME"
-  echo ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME" 
   [ "$SKIP_PASSWORD" -eq "0" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME"
-  
+
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
-  
+
   [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
 }
 
@@ -256,7 +270,7 @@ alias_ssh_key() {
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
   [ -z "$HOST_ALIAS" ] && die "--additional-host not specified"
 
@@ -274,7 +288,6 @@ alias_ssh_key() {
   # Add alias entry for the host
   {
   SAVEIFS=$IFS
-  IFS='\n'
   cat "$SSH_HOSTS_FILE.old" | while read -r LINE; do
 
     IFS=$SAVEIFS
@@ -293,7 +306,6 @@ alias_ssh_key() {
         # skip
         ;;
     esac
-    IFS='\n'
   done;
   } > "$SSH_HOSTS_FILE"
 
@@ -316,12 +328,12 @@ rotate_ssh_key() {
         shift # past value
         ;;
       -c|--comment)
-        COMMENT="$2"        
+        COMMENT="$2"
         shift # past argument
         shift # past value
         ;;
       -n|--no-password)
-        SKIP_PASSWORD=1        
+        SKIP_PASSWORD=1
         shift # past argument
         ;;
       *)    # unknown option
@@ -329,38 +341,38 @@ rotate_ssh_key() {
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
   [ -z "$COMMENT" ] && die "--comment not specified"
-  
+
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"
 
   KEY_BASE_NAME="id_$HOST_FILE_HOST"
   PRIVATE_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME"
   PUBLIC_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME.pub"
-  
+
   [ ! -f "$PRIVATE_KEY_FILENAME" ] && die "Private key does not exist: $PRIVATE_KEY_FILENAME"
   [ ! -f "$PUBLIC_KEY_FILENAME" ] && die "Public key does not exist: $PUBLIC_KEY_FILENAME"
   [ -f "$PRIVATE_KEY_FILENAME.new" ] && rm "$PRIVATE_KEY_FILENAME.new"
   [ -f "$PRIVATE_KEY_FILENAME.new.pub" ] && rm "$PRIVATE_KEY_FILENAME.new.pub"
-  
+
   echo "Rotating SSH key for $HOST"
   echo "Public Key: $PRIVATE_KEY_FILENAME"
-  [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME.new" 
+  [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME.new"
   [ "$SKIP_PASSWORD" -eq "0" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME.new"
-  
+
   if [ -f "$PRIVATE_KEY_FILENAME.new" ] && [ -f "$PRIVATE_KEY_FILENAME.new.pub" ]; then
     [ -d "$SSH_KEY_DIR/old" ] || mkdir -p "$SSH_KEY_DIR/old"
-    
+
     # Backup old key files so can recover if needed although this really should be killed for security
     mv -f "$PUBLIC_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.old.pub"
     mv -f "$PRIVATE_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.old"
-    
+
     mv -f "$PRIVATE_KEY_FILENAME.new.pub" "$PUBLIC_KEY_FILENAME"
     mv -f "$PRIVATE_KEY_FILENAME.new" "$PRIVATE_KEY_FILENAME"
   fi
-  
+
   [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
 }
 
@@ -384,9 +396,9 @@ revoke_ssh_key()
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
-  
+
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"
 
@@ -399,7 +411,7 @@ revoke_ssh_key()
   [ -d "$SSH_KEY_DIR/old" ] || mkdir -p "$SSH_KEY_DIR/old"
   mv -f "$PRIVATE_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.revoked"
   mv -f "$PUBLIC_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.revoked.pub"
-  
+
   # Backup Hosts file
   cp -f "$SSH_HOSTS_FILE" "$SSH_HOSTS_FILE.old"
 
@@ -408,7 +420,6 @@ revoke_ssh_key()
   {
   FOUND=0
   SAVEIFS=$IFS
-  IFS='\n'
   cat "$SSH_HOSTS_FILE.old" | while read -r LINE; do
 
     IFS=$SAVEIFS
@@ -428,7 +439,6 @@ revoke_ssh_key()
         # skip
         ;;
     esac
-    IFS='\n'
   done;
   } > "$SSH_HOSTS_FILE"
 
@@ -454,11 +464,11 @@ show_ssh_key() {
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
 
   HOST_FILE_HOST=$(find_host_file "$HOST")
-  [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"  
+  [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"
 
   KEY_BASE_NAME="id_$HOST_FILE_HOST"
   PRIVATE_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME"
@@ -492,7 +502,7 @@ use_ssh_key() {
   [ -z "$HOST" ] && die "--host not specified"
 
   [ -z "$SSH_AUTH_SOCK" ] && die "SSH_AUTH_SOCK not defined - is ssh-agent running? run systemctl enable --now --user ssh-agent.service"
-  
+
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"
 
@@ -503,7 +513,7 @@ use_ssh_key() {
   [ ! -f "$PRIVATE_KEY_FILENAME" ] && die "Private key does not exist: $PRIVATE_KEY_FILENAME"
   [ ! -f "$PUBLIC_KEY_FILENAME" ] && die "Public key does not exist: $PUBLIC_KEY_FILENAME"
   [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
-  
+
   ssh-add "$PRIVATE_KEY_FILENAME"
   echo "Loaded Keys:"
   ssh-add -l
@@ -534,13 +544,13 @@ import_ssh_key() {
         ;;
     esac
   done
-  
+
   [ -z "$HOST" ] && die "--host not specified"
   [ -z "$SOURCE" ] && die "--source not specified"
 
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ -z "$HOST_FILE_HOST" ] || die "Host already in the SSH config"
-  
+
   KEY_BASE_NAME="id_$HOST"
   PRIVATE_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME"
   PUBLIC_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME.pub"
@@ -555,8 +565,119 @@ import_ssh_key() {
 
   cp "$SOURCE" "$PRIVATE_KEY_FILENAME"
   cp "$SOURCE.pub" "$PRIVATE_KEY_FILENAME"
-  
+
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
+}
+
+###############################################################################
+# upload_to_key_server
+# Shared helper used by the upload subcommand, and later by create (#5) and
+# rotate/revoke (#6).
+# Args: KEY_HOST   - key file stem (id_<KEY_HOST>) and the API {host} segment
+#       REMOTE_USER - the API {user} segment
+###############################################################################
+upload_to_key_server() {
+  UPL_KEY_HOST=$1
+  UPL_REMOTE_USER=$2
+
+  [ -z "$KEYS_SERVER_URL" ] && die "KEYS_SERVER_URL is not set"
+  command -v curl >/dev/null 2>&1 || die "curl not found — install curl to use key server integration"
+  command -v jq   >/dev/null 2>&1 || die "jq not found — install jq to use key server integration"
+
+  UPL_KEY_BASE_NAME="id_$UPL_KEY_HOST"
+  UPL_PRIVATE_KEY="$SSH_KEY_DIR/$UPL_KEY_BASE_NAME"
+  UPL_PUBLIC_KEY="$SSH_KEY_DIR/$UPL_KEY_BASE_NAME.pub"
+
+  [ ! -f "$UPL_PUBLIC_KEY" ]  && die "Public key does not exist: $UPL_PUBLIC_KEY"
+  [ ! -f "$UPL_PRIVATE_KEY" ] && die "Private key does not exist: $UPL_PRIVATE_KEY"
+
+  UPL_KEY_TYPE=$(cut -d' ' -f1 "$UPL_PUBLIC_KEY")
+  case "$UPL_KEY_TYPE" in
+    ssh-ed25519|sk-ssh-ed25519@openssh.com) ;;
+    *) die "Key type '$UPL_KEY_TYPE' is not accepted by the key server (only ssh-ed25519 and sk-ssh-ed25519@openssh.com)" ;;
+  esac
+
+  info "Fetching add-challenge for $UPL_KEY_HOST/$UPL_REMOTE_USER..."
+  CHALLENGE_JSON=$(curl -sf "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER/add-challenge") \
+    || die "Failed to fetch challenge from $KEYS_SERVER_URL"
+
+  UPL_CHALLENGE=$(printf '%s' "$CHALLENGE_JSON" | jq -r '.challenge')
+  UPL_NAMESPACE=$(printf '%s' "$CHALLENGE_JSON" | jq -r '.namespace')
+
+  if [ -z "$UPL_CHALLENGE" ] || [ "$UPL_CHALLENGE" = "null" ]; then
+    die "Key server returned an invalid challenge"
+  fi
+  if [ -z "$UPL_NAMESPACE" ] || [ "$UPL_NAMESPACE" = "null" ]; then
+    die "Key server returned an invalid namespace"
+  fi
+
+  info "Signing challenge..."
+  UPL_TMP=$(mktemp)
+  printf '%s' "$UPL_CHALLENGE" > "$UPL_TMP"
+  if ! ssh-keygen -Y sign -f "$UPL_PRIVATE_KEY" -n "$UPL_NAMESPACE" "$UPL_TMP" >/dev/null 2>&1; then
+    rm -f "$UPL_TMP"
+    die "ssh-keygen sign failed for $UPL_KEY_HOST"
+  fi
+  UPL_SIGNATURE=$(cat "${UPL_TMP}.sig")
+  rm -f "$UPL_TMP" "${UPL_TMP}.sig"
+
+  [ -z "$UPL_SIGNATURE" ] && die "ssh-keygen produced an empty signature for $UPL_KEY_HOST"
+
+  info "Uploading public key to $KEYS_SERVER_URL..."
+  UPL_PUBLIC_KEY_DATA=$(cat "$UPL_PUBLIC_KEY")
+  REQUEST_BODY=$(jq -n \
+    --arg key       "$UPL_PUBLIC_KEY_DATA" \
+    --arg challenge "$UPL_CHALLENGE" \
+    --arg signature "$UPL_SIGNATURE" \
+    '{"key":$key,"challenge":$challenge,"signature":$signature}')
+
+  RESPONSE=$(printf '%s' "$REQUEST_BODY" | curl -sf -X POST \
+    -H 'Content-Type: application/json' \
+    "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER" \
+    --data-binary @-) \
+    || die "Failed to upload key to key server for $UPL_KEY_HOST"
+
+  KEY_ID=$(printf '%s' "$RESPONSE" | jq -r '.keyId')
+  if [ -z "$KEY_ID" ] || [ "$KEY_ID" = "null" ]; then
+    die "Key server did not return a keyId"
+  fi
+
+  printf '%s\n' "$KEY_ID" > "$SSH_KEY_DIR/${UPL_KEY_BASE_NAME}.keyserver-id"
+  success "Uploaded key for $UPL_KEY_HOST (keyId: $KEY_ID)"
+}
+
+###############################################################################
+# upload_ssh_key
+###############################################################################
+upload_ssh_key() {
+  HOST=
+  REMOTE_USER=$USER
+  while [ $# -gt 0 ]; do
+    key="$1"
+    case $key in
+      -h|--host)
+        HOST="$2"
+        shift
+        shift
+        ;;
+      -u|--user)
+        REMOTE_USER="$2"
+        shift
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  [ -z "$HOST" ] && die "--host not specified"
+  [ -z "$REMOTE_USER" ] && die "--user not specified and \$USER is not set"
+
+  HOST_FILE_HOST=$(find_host_file "$HOST")
+  [ -z "$HOST_FILE_HOST" ] && die "Could not find host key for $HOST"
+
+  upload_to_key_server "$HOST_FILE_HOST" "$REMOTE_USER"
 }
 
 ###############################################################################
@@ -571,7 +692,7 @@ audit_ssh_keys() {
         echo "$FILENAME: $KEY"
     fi | sort
   done
-  
+
   [ -f "$SSH_KEY_DIR/id_rsa" ] && die "Warning: default id_rsa key files exists"
   [ -f "$SSH_KEY_DIR/id_ed25519" ] && echo "Warning: default id_ed25519 key files exists"
 }
@@ -587,7 +708,7 @@ shift
 
 if [ "$ACTION" = "create" ]; then
   create_ssh_key "$@"
-elif [ "$ACTION" = "alias" ]; then  
+elif [ "$ACTION" = "alias" ]; then
   alias_ssh_key "$@"
 elif [ "$ACTION" = "revoke" ]; then
   revoke_ssh_key "$@"
@@ -599,6 +720,8 @@ elif [ "$ACTION" = "use" ]; then
   use_ssh_key "$@"
 elif [ "$ACTION" = "import" ]; then
   import_ssh_key "$@"
+elif [ "$ACTION" = "upload" ]; then
+  upload_ssh_key "$@"
 elif [ "$ACTION" = "audit" ]; then
   audit_ssh_keys "$@"
 elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" ]; then
@@ -624,9 +747,11 @@ elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" 
   echo "Unlock an SSH Private key for a host and add to the ssh-agent"
   echo " $PROG use --host <host>"
   echo ""
+  echo "Upload an existing key to the key server (requires KEYS_SERVER_URL env var)"
+  echo " $PROG upload --host <host> [--user <user>]"
+  echo ""
   echo "Audit the encryption details of all installed keys"
   echo " $PROG audit"
 else
   die "Unknown action: $ACTION"
 fi
-

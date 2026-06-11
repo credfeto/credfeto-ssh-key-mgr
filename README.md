@@ -143,6 +143,25 @@ ssh-key-mgr import --host <host> --source <path-to-private-key>
 
 The key pair is copied to `~/.ssh/id_<host>` and a host entry is added to `~/.ssh/config`.
 
+### upload
+
+Upload an already-installed public key to a [credfeto-ssh-key-server](https://github.com/credfeto/credfeto-ssh-key-server) instance. The key must already exist locally — this command does not create or modify any local key files.
+
+```sh
+ssh-key-mgr upload --host <host> [--user <user>]
+```
+
+| Option | Required | Description |
+| --- | --- | --- |
+| `--host <host>` | Yes | Hostname whose public key to upload. Reads `~/.ssh/id_<host>.pub`. |
+| `--user <user>` | No | User to register the key under on the server. Defaults to `$USER`. |
+
+The `KEYS_SERVER_URL` environment variable must be set to the base URL of the key server (see [Key Server Integration](#key-server-integration)).
+
+The server only accepts `ssh-ed25519` and `sk-ssh-ed25519@openssh.com` keys. The command fails fast with a clear message if the key type is not supported.
+
+The key ID returned by the server is stored in `~/.ssh/id_<host>.keyserver-id` for use by future `rotate` and `revoke` operations.
+
 ### audit
 
 Report the algorithm and fingerprint of every key pair currently installed in `~/.ssh/`.
@@ -163,6 +182,24 @@ No options. The command also warns if a default `id_rsa` or `id_ed25519` key is 
 | `~/.ssh/old/id_<host>.old.pub` | Superseded public key after `rotate` |
 | `~/.ssh/old/id_<host>.revoked` | Revoked private key after `revoke` |
 | `~/.ssh/old/id_<host>.revoked.pub` | Revoked public key after `revoke` |
+| `~/.ssh/id_<host>.keyserver-id` | Key server UUID stored after a successful `upload` |
+
+## Key Server Integration
+
+`ssh-key-mgr` can push public keys to a [credfeto-ssh-key-server](https://github.com/credfeto/credfeto-ssh-key-server) instance. Set the `KEYS_SERVER_URL` environment variable to enable this:
+
+```sh
+export KEYS_SERVER_URL=https://keys.markridgwell.com
+```
+
+The `upload` subcommand uses a challenge-response mechanism to prove possession of the private key before the server accepts the public key. It requires `curl` and `jq`.
+
+Once the key server is running and `KEYS_SERVER_URL` is set, `sshd` on each managed host can be configured to fetch authorised keys directly from the server:
+
+```text
+AuthorizedKeysCommand /usr/bin/curl -sf https://keys.markridgwell.com/keys/%H/%u
+AuthorizedKeysCommandUser nobody
+```
 
 ## Key Algorithm
 
