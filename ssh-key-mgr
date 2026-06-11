@@ -248,12 +248,13 @@ create_ssh_key() {
 
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
 
-  [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
-
-  if [ -n "$KEYS_SERVER_URL" ]; then
-    (upload_to_key_server "$HOST" "$REMOTE_USER") || info "Warning: key server upload failed — key was created locally"
-  else
-    info "KEYS_SERVER_URL not set — skipping key server upload"
+  if [ -f "$PUBLIC_KEY_FILENAME" ]; then
+    cat "$PUBLIC_KEY_FILENAME"
+    if [ -n "$KEYS_SERVER_URL" ]; then
+      (upload_to_key_server "$HOST" "$REMOTE_USER") || info "Warning: key server upload failed — key was created locally"
+    else
+      info "KEYS_SERVER_URL not set — skipping key server upload"
+    fi
   fi
 }
 
