@@ -42,7 +42,7 @@ ssh-key-mgr <subcommand> [options]
 Generate a new ed25519 SSH key pair for a host and add it to `~/.ssh/config`.
 
 ```sh
-ssh-key-mgr create --host <host> --comment <comment> [--no-password]
+ssh-key-mgr create --host <host> --comment <comment> [--no-password] [--user <user>]
 ```
 
 | Option | Required | Description |
@@ -50,8 +50,9 @@ ssh-key-mgr create --host <host> --comment <comment> [--no-password]
 | `--host <host>` | Yes | Hostname to create the key for. The key is stored as `~/.ssh/id_<host>`. |
 | `--comment <comment>` | No | Key comment embedded in the public key. Defaults to `<host> for <user>@<hostname>`. |
 | `--no-password` | No | Generate the key without a passphrase. Omitting this flag prompts for a passphrase. |
+| `--user <user>` | No | User to register the key under on the key server. Defaults to `$USER`. Only used when `KEYS_SERVER_URL` is set. |
 
-After generation the public key is printed to stdout.
+After generation the public key is printed to stdout. If `KEYS_SERVER_URL` is set, the new key is automatically uploaded to the key server. If the upload fails, a warning is printed but the local key and config entry are retained.
 
 ### alias
 
