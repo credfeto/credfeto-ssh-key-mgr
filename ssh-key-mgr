@@ -198,6 +198,7 @@ create_ssh_key() {
   HOST=
   COMMENT=
   SKIP_PASSWORD=1
+  REMOTE_USER=$USER
   while [ $# -gt 0 ]; do
     key="$1"
 
@@ -215,6 +216,11 @@ create_ssh_key() {
       -p|--password)
         SKIP_PASSWORD=0
         shift # past argument
+        ;;
+      -u|--user)
+        REMOTE_USER="$2"
+        shift # past argument
+        shift # past value
         ;;
       *)    # unknown option
         shift # past argument
@@ -242,7 +248,14 @@ create_ssh_key() {
 
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
 
-  [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
+  if [ -f "$PUBLIC_KEY_FILENAME" ]; then
+    cat "$PUBLIC_KEY_FILENAME"
+    if [ -n "$KEYS_SERVER_URL" ]; then
+      (upload_to_key_server "$HOST" "$REMOTE_USER") || info "Warning: key server upload failed — key was created locally"
+    else
+      info "KEYS_SERVER_URL not set — skipping key server upload"
+    fi
+  fi
 }
 
 ###############################################################################
@@ -730,7 +743,7 @@ elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" 
   echo "Usage:"
   echo ""
   echo "Generate a new SSH Key for a host"
-  echo " $PROG create --host <host> --comment <comment> [--no-password]"
+  echo " $PROG create --host <host> --comment <comment> [--no-password] [--user <user>]"
   echo ""
   echo "Add an alias to use an existing key for another host"
   echo " $PROG alias --host <host> --additional-host <host>"
