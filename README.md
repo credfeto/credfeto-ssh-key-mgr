@@ -72,21 +72,24 @@ ssh-key-mgr alias --host <host> --additional-host <additional-host>
 Revoke an SSH key by moving both key files into `~/.ssh/old/` with a `.revoked` suffix and removing the host entry from `~/.ssh/config`.
 
 ```sh
-ssh-key-mgr revoke --host <host>
+ssh-key-mgr revoke --host <host> [--user <user>]
 ```
 
 | Option | Required | Description |
 | --- | --- | --- |
 | `--host <host>` | Yes | Hostname whose key is to be revoked. |
+| `--user <user>` | No | User to remove the key for on the key server. Defaults to `$USER`. Only used when `KEYS_SERVER_URL` is set. |
 
 The old key files are retained in `~/.ssh/old/` so they can be recovered if needed, though they should not be reused.
+
+If `KEYS_SERVER_URL` is set and a `.keyserver-id` file exists for the host, the key is removed from the key server before the local files are moved. The key server step is skipped with a warning if `KEYS_SERVER_URL` is unset, `curl`/`jq` are unavailable, or no `.keyserver-id` file is present — the local revoke operation always completes.
 
 ### rotate
 
 Replace an existing host key with a freshly generated one. The old key pair is moved to `~/.ssh/old/` before the new key is written.
 
 ```sh
-ssh-key-mgr rotate --host <host> --comment <comment> [--no-password]
+ssh-key-mgr rotate --host <host> --comment <comment> [--no-password] [--user <user>]
 ```
 
 | Option | Required | Description |
@@ -94,8 +97,11 @@ ssh-key-mgr rotate --host <host> --comment <comment> [--no-password]
 | `--host <host>` | Yes | Hostname whose key is to be rotated. |
 | `--comment <comment>` | Yes | Key comment for the new public key. |
 | `--no-password` | No | Generate the replacement key without a passphrase. Omitting this flag prompts for a passphrase. |
+| `--user <user>` | No | User to update the key for on the key server. Defaults to `$USER`. Only used when `KEYS_SERVER_URL` is set. |
 
 After rotation the new public key is printed to stdout.
+
+If `KEYS_SERVER_URL` is set, the old key is removed from the key server (signed with the old private key, before it is moved) and the new key is uploaded. Each server step is skipped with a warning if it cannot complete — the local rotate operation always completes.
 
 ### show
 

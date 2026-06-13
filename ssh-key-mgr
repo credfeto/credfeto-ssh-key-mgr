@@ -233,7 +233,7 @@ create_ssh_key() {
   [ -z "$COMMENT" ] && die "--comment not specified"
 
   HOST_FILE_HOST=$(find_host_file "$HOST")
-  [ ! -z "$HOST_FILE_HOST" ] && die "Host already has key"
+  [ -n "$HOST_FILE_HOST" ] && die "Host already has key"
 
   KEY_BASE_NAME="id_$HOST"
   PRIVATE_KEY_FILENAME="$SSH_KEY_DIR/$KEY_BASE_NAME"
@@ -291,7 +291,7 @@ alias_ssh_key() {
   [ -z "$HOST_FILE_HOST" ] && die "Could not find host key"
 
   ALIAS_HOST_FILE_HOST=$(find_host_file "$HOST_ALIAS")
-  [ ! -z "$ALIAS_HOST_FILE_HOST" ] && die "Alias already in host"
+  [ -n "$ALIAS_HOST_FILE_HOST" ] && die "Alias already in host"
 
 
   # Backup Hosts file
@@ -301,7 +301,7 @@ alias_ssh_key() {
   # Add alias entry for the host
   {
   SAVEIFS=$IFS
-  cat "$SSH_HOSTS_FILE.old" | while read -r LINE; do
+  while read -r LINE; do
 
     IFS=$SAVEIFS
     case $LINE in
@@ -319,7 +319,7 @@ alias_ssh_key() {
         # skip
         ;;
     esac
-  done;
+  done < "$SSH_HOSTS_FILE.old";
   } > "$SSH_HOSTS_FILE"
 
 }
@@ -331,6 +331,7 @@ rotate_ssh_key() {
   HOST=
   COMMENT=
   SKIP_PASSWORD=0
+  REMOTE_USER=$USER
   while [ $# -gt 0 ]; do
     key="$1"
 
@@ -348,6 +349,11 @@ rotate_ssh_key() {
       -n|--no-password)
         SKIP_PASSWORD=1
         shift # past argument
+        ;;
+      -u|--user)
+        REMOTE_USER="$2"
+        shift # past argument
+        shift # past value
         ;;
       *)    # unknown option
         shift # past argument
@@ -378,6 +384,9 @@ rotate_ssh_key() {
   if [ -f "$PRIVATE_KEY_FILENAME.new" ] && [ -f "$PRIVATE_KEY_FILENAME.new.pub" ]; then
     [ -d "$SSH_KEY_DIR/old" ] || mkdir -p "$SSH_KEY_DIR/old"
 
+    # Remove old key from server before moving it — signing requires the key to still be in place
+    remove_from_key_server "$HOST_FILE_HOST" "$REMOTE_USER" "$PRIVATE_KEY_FILENAME"
+
     # Backup old key files so can recover if needed although this really should be killed for security
     mv -f "$PUBLIC_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.old.pub"
     mv -f "$PRIVATE_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.old"
@@ -386,7 +395,14 @@ rotate_ssh_key() {
     mv -f "$PRIVATE_KEY_FILENAME.new" "$PRIVATE_KEY_FILENAME"
   fi
 
-  [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
+  if [ -f "$PUBLIC_KEY_FILENAME" ]; then
+    cat "$PUBLIC_KEY_FILENAME"
+    if [ -n "$KEYS_SERVER_URL" ]; then
+      (upload_to_key_server "$HOST_FILE_HOST" "$REMOTE_USER") || info "Warning: key server upload failed — key was rotated locally"
+    else
+      info "KEYS_SERVER_URL not set — skipping key server upload"
+    fi
+  fi
 }
 
 ###############################################################################
@@ -395,12 +411,18 @@ rotate_ssh_key() {
 revoke_ssh_key()
 {
   HOST=
+  REMOTE_USER=$USER
   while [ $# -gt 0 ]; do
     key="$1"
 
     case $key in
       -h|--host)
         HOST="$2"
+        shift # past argument
+        shift # past value
+        ;;
+      -u|--user)
+        REMOTE_USER="$2"
         shift # past argument
         shift # past value
         ;;
@@ -421,6 +443,9 @@ revoke_ssh_key()
   [ ! -f "$PRIVATE_KEY_FILENAME" ] && die "Private key does not exist: $PRIVATE_KEY_FILENAME"
   [ ! -f "$PUBLIC_KEY_FILENAME" ] && die "Public key does not exist: $PUBLIC_KEY_FILENAME"
 
+  # Remove from server before moving key files — signing requires the key to still be in place
+  remove_from_key_server "$HOST_FILE_HOST" "$REMOTE_USER" "$PRIVATE_KEY_FILENAME"
+
   [ -d "$SSH_KEY_DIR/old" ] || mkdir -p "$SSH_KEY_DIR/old"
   mv -f "$PRIVATE_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.revoked"
   mv -f "$PUBLIC_KEY_FILENAME" "$SSH_KEY_DIR/old/$KEY_BASE_NAME.revoked.pub"
@@ -433,7 +458,7 @@ revoke_ssh_key()
   {
   FOUND=0
   SAVEIFS=$IFS
-  cat "$SSH_HOSTS_FILE.old" | while read -r LINE; do
+  while read -r LINE; do
 
     IFS=$SAVEIFS
     case $LINE in
@@ -452,7 +477,7 @@ revoke_ssh_key()
         # skip
         ;;
     esac
-  done;
+  done < "$SSH_HOSTS_FILE.old";
   } > "$SSH_HOSTS_FILE"
 
 
@@ -580,6 +605,84 @@ import_ssh_key() {
   cp "$SOURCE.pub" "$PRIVATE_KEY_FILENAME"
 
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
+}
+
+###############################################################################
+# remove_from_key_server
+# Soft-failure helper: removes a key from the key server using challenge-response.
+# If KEYS_SERVER_URL is unset, curl/jq missing, or .keyserver-id absent, emits
+# a warning and returns 0 so the local operation is never blocked.
+# Args: REMOVE_HOST        - API {host} segment
+#       REMOVE_USER        - API {user} segment
+#       REMOVE_PRIVATE_KEY - path to private key used to sign the challenge
+###############################################################################
+remove_from_key_server() {
+  RMV_HOST=$1
+  RMV_USER=$2
+  RMV_PRIVATE_KEY=$3
+
+  if [ -z "$KEYS_SERVER_URL" ]; then
+    info "Warning: KEYS_SERVER_URL not set — skipping server removal"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    info "Warning: curl not found — skipping server removal"
+    return 0
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    info "Warning: jq not found — skipping server removal"
+    return 0
+  fi
+
+  RMV_KEY_ID_FILE="$SSH_KEY_DIR/id_${RMV_HOST}.keyserver-id"
+  if [ ! -f "$RMV_KEY_ID_FILE" ]; then
+    info "Warning: no keyId stored for $RMV_HOST — skipping server removal"
+    return 0
+  fi
+  RMV_KEY_ID=$(cat "$RMV_KEY_ID_FILE")
+
+  info "Fetching delete challenge for $RMV_HOST/$RMV_USER..."
+  RMV_CHALLENGE_JSON=$(curl -sf "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID/challenge") \
+    || { info "Warning: failed to fetch delete challenge — skipping server removal"; return 0; }
+
+  RMV_CHALLENGE=$(printf '%s' "$RMV_CHALLENGE_JSON" | jq -r '.challenge')
+  RMV_NAMESPACE=$(printf '%s' "$RMV_CHALLENGE_JSON" | jq -r '.namespace')
+
+  if [ -z "$RMV_CHALLENGE" ] || [ "$RMV_CHALLENGE" = "null" ]; then
+    info "Warning: key server returned invalid delete challenge — skipping server removal"
+    return 0
+  fi
+
+  info "Signing delete challenge..."
+  RMV_TMP=$(mktemp)
+  printf '%s' "$RMV_CHALLENGE" > "$RMV_TMP"
+  if ! ssh-keygen -Y sign -f "$RMV_PRIVATE_KEY" -n "$RMV_NAMESPACE" "$RMV_TMP" >/dev/null 2>&1; then
+    rm -f "$RMV_TMP" "${RMV_TMP}.sig"
+    info "Warning: ssh-keygen sign failed for $RMV_HOST — skipping server removal"
+    return 0
+  fi
+  RMV_SIGNATURE=$(cat "${RMV_TMP}.sig")
+  rm -f "$RMV_TMP" "${RMV_TMP}.sig"
+
+  if [ -z "$RMV_SIGNATURE" ]; then
+    info "Warning: ssh-keygen produced empty signature for $RMV_HOST — skipping server removal"
+    return 0
+  fi
+
+  info "Removing key from $KEYS_SERVER_URL..."
+  if jq -n \
+    --arg challenge "$RMV_CHALLENGE" \
+    --arg signature "$RMV_SIGNATURE" \
+    '{"challenge":$challenge,"signature":$signature}' \
+    | curl -sf -X DELETE \
+        -H 'Content-Type: application/json' \
+        "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID" \
+        --data-binary @- >/dev/null; then
+    rm -f "$RMV_KEY_ID_FILE"
+    success "Removed key for $RMV_HOST from key server"
+  else
+    info "Warning: failed to remove key from server for $RMV_HOST"
+  fi
 }
 
 ###############################################################################
@@ -749,10 +852,10 @@ elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" 
   echo " $PROG alias --host <host> --additional-host <host>"
   echo ""
   echo "Revoke an SSH Key"
-  echo " $PROG revoke --host <host>"
+  echo " $PROG revoke --host <host> [--user <user>]"
   echo ""
   echo "Replace an SSH Key generating a new one"
-  echo " $PROG rotate --host <host> --comment <comment> [--no-password]"
+  echo " $PROG rotate --host <host> --comment <comment> [--no-password] [--user <user>]"
   echo ""
   echo "Show the public key for a host"
   echo " $PROG show --host <host>"
