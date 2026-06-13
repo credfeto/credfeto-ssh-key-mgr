@@ -14,6 +14,8 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - PKGBUILD for Arch Linux packaging via makepkg
 - upload subcommand to push an existing key to the key server with challenge-response authentication
 - Auto-upload new key to credfeto-ssh-key-server on create
+- Remove old key from credfeto-ssh-key-server on rotate or revoke
+- Add --user flag to rotate and revoke subcommands for key server integration
 ### Fixed
 - Corrected broken cross-reference in github-workflows.instructions.md — anchor #visual-indicators updated to #output-helpers to match actual section name in shell-scripts.instructions.md
 - shell.firewall.examples.md open_port_for_private_networks no longer calls firewall-cmd --reload internally; added explicit caller-reload rule to shell.firewall.instructions.md
