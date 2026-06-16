@@ -1,0 +1,31 @@
+--- # Test: run bats unit tests
+name: "Test: bats"
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: true
+
+jobs:
+  bats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout source"
+        uses: actions/checkout@v6.0.3
+        with:
+          clean: true
+          fetch-depth: 1
+
+      - name: "Install bats"
+        shell: bash
+        run: sudo apt-get install -y bats
+
+      - name: "Run bats tests"
+        shell: bash
+        run: bats --recursive test/
