@@ -602,7 +602,7 @@ import_ssh_key() {
   ssh-keygen -l -f "$SOURCE.pub" || die "$SOURCE.pub: invalid private key"
 
   cp "$SOURCE" "$PRIVATE_KEY_FILENAME"
-  cp "$SOURCE.pub" "$PRIVATE_KEY_FILENAME"
+  cp "$SOURCE.pub" "$PUBLIC_KEY_FILENAME"
 
   add_config_host_entry "$HOST" "$KEY_BASE_NAME"
 }
