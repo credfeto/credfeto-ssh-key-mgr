@@ -809,8 +809,12 @@ audit_ssh_keys() {
     fi | sort
   done
 
-  [ -f "$SSH_KEY_DIR/id_rsa" ] && die "Warning: default id_rsa key files exists"
-  [ -f "$SSH_KEY_DIR/id_ed25519" ] && echo "Warning: default id_ed25519 key files exists"
+  if [ -f "$SSH_KEY_DIR/id_rsa" ]; then
+    die "Warning: default id_rsa key files exists"
+  fi
+  if [ -f "$SSH_KEY_DIR/id_ed25519" ]; then
+    echo "Warning: default id_ed25519 key files exists"
+  fi
 }
 
 ###############################################################################

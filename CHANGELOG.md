@@ -17,6 +17,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - Remove old key from credfeto-ssh-key-server on rotate or revoke
 - Add --user flag to rotate and revoke subcommands for key server integration
 - Bats unit tests covering all subcommands
+- CI workflow to run bats tests on every push and pull request
 ### Fixed
 - Corrected broken cross-reference in github-workflows.instructions.md — anchor #visual-indicators updated to #output-helpers to match actual section name in shell-scripts.instructions.md
 - shell.firewall.examples.md open_port_for_private_networks no longer calls firewall-cmd --reload internally; added explicit caller-reload rule to shell.firewall.instructions.md
@@ -25,6 +26,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - IFS='\\n' no-op assignments in alias and revoke subcommands replaced with correct IFS handling
 - removed unused BASEDIR variable
 - import subcommand was copying the public key to the private key path
+- audit subcommand incorrectly exited non-zero when no default SSH key files existed
 ### Changed
 - die() must output to stderr so error messages are not swallowed by stdout pipelines
 ### Deprecated
