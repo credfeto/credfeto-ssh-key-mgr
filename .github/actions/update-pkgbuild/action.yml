@@ -1,0 +1,87 @@
+--- # Action: Update PKGBUILD version and sha256sums
+name: "Update PKGBUILD"
+description: "Updates pkgver, resets pkgrel to 1, downloads the release tarball, computes sha256sum, and updates sha256sums in the PKGBUILD"
+
+inputs:
+  pkgver:
+    description: "Package version to set in the PKGBUILD (without leading v)"
+    required: true
+  pkgbuild-dir:
+    description: "Path to the directory containing the PKGBUILD file, relative to the workspace root"
+    required: false
+    default: "pkg"
+  github-repository:
+    description: "GitHub repository in owner/repo format (e.g. credfeto/credfeto-ssh-key-mgr)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: "Validate inputs"
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${{ inputs.pkgver }}" ]; then
+          echo "::error::pkgver input is required and must not be empty"
+          exit 1
+        fi
+        if [ -z "${{ inputs.github-repository }}" ]; then
+          echo "::error::github-repository input is required and must not be empty"
+          exit 1
+        fi
+        PKGBUILD="${{ github.workspace }}/${{ inputs.pkgbuild-dir }}/PKGBUILD"
+        if [ ! -f "${PKGBUILD}" ]; then
+          echo "::error::PKGBUILD not found at ${PKGBUILD}"
+          exit 1
+        fi
+
+    - name: "Update pkgver and pkgrel in PKGBUILD"
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKGBUILD="${{ github.workspace }}/${{ inputs.pkgbuild-dir }}/PKGBUILD"
+        PKGVER="${{ inputs.pkgver }}"
+        sed -i "s|^pkgver=.*|pkgver=${PKGVER}|" "${PKGBUILD}"
+        sed -i "s|^pkgrel=.*|pkgrel=1|" "${PKGBUILD}"
+        echo "ℹ️ Updated pkgver to ${PKGVER} and reset pkgrel to 1"
+
+    - name: "Download release tarball and compute sha256sum"
+      id: sha256
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKGVER="${{ inputs.pkgver }}"
+        REPO="${{ inputs.github-repository }}"
+        TARBALL_URL="https://github.com/${REPO}/archive/refs/tags/v${PKGVER}.tar.gz"
+        TARBALL_FILE="${{ runner.temp }}/source-${PKGVER}.tar.gz"
+        echo "ℹ️ Downloading tarball from ${TARBALL_URL}"
+        if ! curl --silent --show-error --fail --location --output "${TARBALL_FILE}" "${TARBALL_URL}"; then
+          echo "::error::Failed to download release tarball from ${TARBALL_URL}. Ensure the tag v${PKGVER} exists on GitHub."
+          exit 1
+        fi
+        SHA256=$(sha256sum "${TARBALL_FILE}" | awk '{print $1}')
+        echo "ℹ️ Computed sha256sum: ${SHA256}"
+        echo "sha256sum=${SHA256}" >> "${GITHUB_OUTPUT}"
+
+    - name: "Update sha256sums in PKGBUILD"
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKGBUILD="${{ github.workspace }}/${{ inputs.pkgbuild-dir }}/PKGBUILD"
+        SHA256="${{ steps.sha256.outputs.sha256sum }}"
+        sed -i "s|^sha256sums=.*|sha256sums=('${SHA256}')|" "${PKGBUILD}"
+        echo "✅ Updated sha256sums in PKGBUILD"
+
+    - name: "Validate PKGBUILD syntax"
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKGBUILD="${{ github.workspace }}/${{ inputs.pkgbuild-dir }}/PKGBUILD"
+        if bash -n "${PKGBUILD}"; then
+          echo "✅ PKGBUILD syntax is valid"
+        else
+          echo "::error::PKGBUILD failed syntax check"
+          exit 1
+        fi
+        echo "ℹ️ Updated PKGBUILD:"
+        grep -E "^(pkgver|pkgrel|sha256sums)=" "${PKGBUILD}"
