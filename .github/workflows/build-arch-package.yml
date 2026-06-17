@@ -1,0 +1,40 @@
+--- # Build: Arch Linux package using makepkg
+name: "Build: Arch Linux package"
+
+on:
+  push:
+    branches:
+      - 'release/*'
+      - 'hotfix/*'
+
+# Don't cancel anything in progress
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}-arch-package
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-arch-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout source"
+        uses: actions/checkout@v6.0.3
+        with:
+          clean: true
+          fetch-depth: 1
+
+      - name: "Build Arch Linux package"
+        id: makepkg
+        uses: ./.github/actions/makepkg-build
+        with:
+          pkgbuild-dir: "pkg"
+
+      - name: "Upload package artefact"
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: "arch-package"
+          path: "${{steps.makepkg.outputs.package-path}}"
+          if-no-files-found: error

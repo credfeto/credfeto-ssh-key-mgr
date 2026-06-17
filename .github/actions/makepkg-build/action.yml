@@ -1,0 +1,44 @@
+--- # Action: Build Arch Linux package using makepkg
+name: "Build Arch Linux package"
+description: "Builds an Arch Linux .pkg.tar.zst package from a PKGBUILD using makepkg inside an archlinux:latest Docker container"
+
+inputs:
+  pkgbuild-dir:
+    description: "Path to the directory containing the PKGBUILD file, relative to the workspace root"
+    required: false
+    default: "pkg"
+
+outputs:
+  package-path:
+    description: "Absolute path to the built .pkg.tar.zst file"
+    value: ${{steps.build.outputs.package-path}}
+
+runs:
+  using: composite
+  steps:
+    - name: "Build Arch Linux package with makepkg"
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKGBUILD_DIR="${{ github.workspace }}/${{ inputs.pkgbuild-dir }}"
+        OUTPUT_DIR="${{ runner.temp }}/arch-pkg-output"
+        mkdir -p "${OUTPUT_DIR}"
+        docker run --rm \
+          --volume "${PKGBUILD_DIR}:/build" \
+          --volume "${OUTPUT_DIR}:/output" \
+          archlinux:latest \
+          /bin/bash -c '
+            set -euo pipefail
+            pacman -Sy --noconfirm base-devel openssh coreutils
+            useradd -m builder
+            chown -R builder:builder /build
+            su builder -s /bin/bash -c "cd /build && makepkg -s --noconfirm --noprogressbar"
+            cp /build/*.pkg.tar.zst /output/
+          '
+        PACKAGE_FILE=$(find "${OUTPUT_DIR}" -name "*.pkg.tar.zst" | head -1)
+        if [ -z "${PACKAGE_FILE}" ]; then
+          echo "::error::No .pkg.tar.zst file was produced by makepkg"
+          exit 1
+        fi
+        echo "package-path=${PACKAGE_FILE}" >> "${GITHUB_OUTPUT}"
