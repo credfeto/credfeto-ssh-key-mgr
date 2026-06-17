@@ -6,6 +6,11 @@ on:
     branches:
       - 'release/*'
       - 'hotfix/*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version to build (without leading v, e.g. 1.2.3)"
+        required: false
 
 # Don't cancel anything in progress
 concurrency:
@@ -25,6 +30,36 @@ jobs:
         with:
           clean: true
           fetch-depth: 1
+
+      - name: "Calculate build version"
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            PKGVER="${{ github.event.inputs.version }}"
+            echo "ℹ️ Using manually supplied version: ${PKGVER}"
+          else
+            # Extract version from branch name: release/1.2.3 -> 1.2.3
+            BRANCH="${{ github.ref_name }}"
+            PKGVER="${BRANCH#release/}"
+            PKGVER="${PKGVER#hotfix/}"
+            echo "ℹ️ Extracted version from branch '${BRANCH}': ${PKGVER}"
+          fi
+          if [ -z "${PKGVER}" ] || [ "${PKGVER}" = "${{ github.ref_name }}" ]; then
+            BRANCH="${{ github.ref_name }}"
+            echo "::error::Could not determine version from branch '${BRANCH}'."
+            echo "::error::Branch must follow release/<version> or hotfix/<version> pattern."
+            exit 1
+          fi
+          echo "pkgver=${PKGVER}" >> "${GITHUB_OUTPUT}"
+
+      - name: "Update PKGBUILD"
+        uses: ./.github/actions/update-pkgbuild
+        with:
+          pkgver: "${{steps.version.outputs.pkgver}}"
+          pkgbuild-dir: "pkg"
+          github-repository: "${{github.repository}}"
 
       - name: "Build Arch Linux package"
         id: makepkg
