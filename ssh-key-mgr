@@ -242,7 +242,7 @@ create_ssh_key() {
   [ -f "$PUBLIC_KEY_FILENAME" ] && die "Public key already exists: $PUBLIC_KEY_FILENAME"
 
   info "Creating new SSH key for $HOST"
-  info "Public Key: $PRIVATE_KEY_FILENAME"
+  info "Private Key: $PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "0" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME"
 
