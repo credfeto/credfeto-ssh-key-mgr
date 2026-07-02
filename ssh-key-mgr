@@ -123,6 +123,10 @@ list_item() {
     printf '\033[32m→\033[0m %s\n' "$*"
 }
 
+warn() {
+    printf '\n\033[33m!\033[0m %s\n' "$*" >&2
+}
+
 # Returns true (0) when running inside a Claude Code Bash-tool session.
 # Claude Code sets CLAUDECODE=1 in every shell it spawns via the Bash tool;
 # that value is inherited by subprocesses (e.g. git hooks).
@@ -818,7 +822,7 @@ audit_ssh_keys() {
     die "Warning: default id_rsa key files exists"
   fi
   if [ -f "$SSH_KEY_DIR/id_ed25519" ]; then
-    info "Warning: default id_ed25519 key files exist"
+    warn "Warning: default id_ed25519 key files exist"
   fi
 }
 
