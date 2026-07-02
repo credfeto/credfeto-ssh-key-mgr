@@ -119,6 +119,10 @@ info() {
     printf '\n\033[32m→\033[0m %s\n' "$*"
 }
 
+list_item() {
+    printf '\033[32m→\033[0m %s\n' "$*"
+}
+
 # Returns true (0) when running inside a Claude Code Bash-tool session.
 # Claude Code sets CLAUDECODE=1 in every shell it spawns via the Bash tool;
 # that value is inherited by subprocesses (e.g. git hooks).
@@ -807,7 +811,7 @@ audit_ssh_keys() {
         printf '%s: %s\n' "$FILENAME" "$KEY"
     fi
   done | sort | while IFS= read -r LINE; do
-    info "$LINE"
+    list_item "$LINE"
   done
 
   if [ -f "$SSH_KEY_DIR/id_rsa" ]; then
