@@ -31,6 +31,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - audit subcommand incorrectly exited non-zero when no default SSH key files existed
 ### Changed
 - die() must output to stderr so error messages are not swallowed by stdout pipelines
+- Replaced bare echo/printf calls with die/success/info output helpers throughout script for consistent user-facing output
 ### Deprecated
 ### Removed
 ### Deployment Changes
