@@ -241,8 +241,8 @@ create_ssh_key() {
   [ -f "$PRIVATE_KEY_FILENAME" ] && die "Private key already exists: $PRIVATE_KEY_FILENAME"
   [ -f "$PUBLIC_KEY_FILENAME" ] && die "Public key already exists: $PUBLIC_KEY_FILENAME"
 
-  echo "Creating new SSH key for $HOST"
-  echo "Public Key: $PRIVATE_KEY_FILENAME"
+  info "Creating new SSH key for $HOST"
+  info "Public Key: $PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "0" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME"
 
@@ -376,8 +376,8 @@ rotate_ssh_key() {
   [ -f "$PRIVATE_KEY_FILENAME.new" ] && rm "$PRIVATE_KEY_FILENAME.new"
   [ -f "$PRIVATE_KEY_FILENAME.new.pub" ] && rm "$PRIVATE_KEY_FILENAME.new.pub"
 
-  echo "Rotating SSH key for $HOST"
-  echo "Public Key: $PRIVATE_KEY_FILENAME"
+  info "Rotating SSH key for $HOST"
+  info "Public Key: $PRIVATE_KEY_FILENAME"
   [ "$SKIP_PASSWORD" -eq "1" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -P "" -f "$PRIVATE_KEY_FILENAME.new"
   [ "$SKIP_PASSWORD" -eq "0" ] && ssh-keygen -a "$SSH_KEY_ROUNDS" -t "$SSH_KEY_ALGORITHM" -C "$COMMENT" -f "$PRIVATE_KEY_FILENAME.new"
 
@@ -553,7 +553,7 @@ use_ssh_key() {
   [ -f "$PUBLIC_KEY_FILENAME" ] && cat "$PUBLIC_KEY_FILENAME"
 
   ssh-add "$PRIVATE_KEY_FILENAME"
-  echo "Loaded Keys:"
+  info "Loaded Keys:"
   ssh-add -l
 }
 
@@ -805,7 +805,7 @@ audit_ssh_keys() {
     if [ -f "$KEY_FILE.pub" ] && [ -f "$KEY_FILE" ] ; then
         FILENAME=$(basename "${KEY_FILE}")
         KEY=$(ssh-keygen -l -f "${KEY_FILE}")
-        echo "$FILENAME: $KEY"
+        info "$FILENAME: $KEY"
     fi | sort
   done
 
@@ -813,7 +813,7 @@ audit_ssh_keys() {
     die "Warning: default id_rsa key files exists"
   fi
   if [ -f "$SSH_KEY_DIR/id_ed25519" ]; then
-    echo "Warning: default id_ed25519 key files exists"
+    info "Warning: default id_ed25519 key files exists"
   fi
 }
 
@@ -845,33 +845,24 @@ elif [ "$ACTION" = "upload" ]; then
 elif [ "$ACTION" = "audit" ]; then
   audit_ssh_keys "$@"
 elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" ]; then
-  echo "SSH Key manager"
-  echo ""
-  echo "Usage:"
-  echo ""
-  echo "Generate a new SSH Key for a host"
-  echo " $PROG create --host <host> --comment <comment> [--no-password] [--user <user>]"
-  echo ""
-  echo "Add an alias to use an existing key for another host"
-  echo " $PROG alias --host <host> --additional-host <host>"
-  echo ""
-  echo "Revoke an SSH Key"
-  echo " $PROG revoke --host <host> [--user <user>]"
-  echo ""
-  echo "Replace an SSH Key generating a new one"
-  echo " $PROG rotate --host <host> --comment <comment> [--no-password] [--user <user>]"
-  echo ""
-  echo "Show the public key for a host"
-  echo " $PROG show --host <host>"
-  echo ""
-  echo "Unlock an SSH Private key for a host and add to the ssh-agent"
-  echo " $PROG use --host <host>"
-  echo ""
-  echo "Upload an existing key to the key server (requires KEYS_SERVER_URL env var)"
-  echo " $PROG upload --host <host> [--user <user>]"
-  echo ""
-  echo "Audit the encryption details of all installed keys"
-  echo " $PROG audit"
+  info "SSH Key manager"
+  info "Usage:"
+  info "Generate a new SSH Key for a host"
+  info " $PROG create --host <host> --comment <comment> [--no-password] [--user <user>]"
+  info "Add an alias to use an existing key for another host"
+  info " $PROG alias --host <host> --additional-host <host>"
+  info "Revoke an SSH Key"
+  info " $PROG revoke --host <host> [--user <user>]"
+  info "Replace an SSH Key generating a new one"
+  info " $PROG rotate --host <host> --comment <comment> [--no-password] [--user <user>]"
+  info "Show the public key for a host"
+  info " $PROG show --host <host>"
+  info "Unlock an SSH Private key for a host and add to the ssh-agent"
+  info " $PROG use --host <host>"
+  info "Upload an existing key to the key server (requires KEYS_SERVER_URL env var)"
+  info " $PROG upload --host <host> [--user <user>]"
+  info "Audit the encryption details of all installed keys"
+  info " $PROG audit"
 else
   die "Unknown action: $ACTION"
 fi
