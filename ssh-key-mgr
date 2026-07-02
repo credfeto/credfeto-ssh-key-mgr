@@ -127,6 +127,10 @@ warn() {
     printf '\n\033[33m!\033[0m %s\n' "$*" >&2
 }
 
+example() {
+    printf '   %s\n' "$*"
+}
+
 # Returns true (0) when running inside a Claude Code Bash-tool session.
 # Claude Code sets CLAUDECODE=1 in every shell it spawns via the Bash tool;
 # that value is inherited by subprocesses (e.g. git hooks).
@@ -857,21 +861,21 @@ elif [ "$ACTION" = "help"  ] || [ "$ACTION" = "--?" ] || [ "$ACTION" = "--help" 
   info "SSH Key manager"
   info "Usage:"
   info "Generate a new SSH Key for a host"
-  printf '   %s\n' "$PROG create --host <host> --comment <comment> [--no-password] [--user <user>]"
+  example "$PROG create --host <host> --comment <comment> [--no-password] [--user <user>]"
   info "Add an alias to use an existing key for another host"
-  printf '   %s\n' "$PROG alias --host <host> --additional-host <host>"
+  example "$PROG alias --host <host> --additional-host <host>"
   info "Revoke an SSH Key"
-  printf '   %s\n' "$PROG revoke --host <host> [--user <user>]"
+  example "$PROG revoke --host <host> [--user <user>]"
   info "Replace an SSH Key generating a new one"
-  printf '   %s\n' "$PROG rotate --host <host> --comment <comment> [--no-password] [--user <user>]"
+  example "$PROG rotate --host <host> --comment <comment> [--no-password] [--user <user>]"
   info "Show the public key for a host"
-  printf '   %s\n' "$PROG show --host <host>"
+  example "$PROG show --host <host>"
   info "Unlock an SSH Private key for a host and add to the ssh-agent"
-  printf '   %s\n' "$PROG use --host <host>"
+  example "$PROG use --host <host>"
   info "Upload an existing key to the key server (requires KEYS_SERVER_URL env var)"
-  printf '   %s\n' "$PROG upload --host <host> [--user <user>]"
+  example "$PROG upload --host <host> [--user <user>]"
   info "Audit the encryption details of all installed keys"
-  printf '   %s\n' "$PROG audit"
+  example "$PROG audit"
 else
   die "Unknown action: $ACTION"
 fi
