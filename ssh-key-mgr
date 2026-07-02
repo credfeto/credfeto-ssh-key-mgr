@@ -801,12 +801,13 @@ upload_ssh_key() {
 ###############################################################################
 audit_ssh_keys() {
   for KEY_FILE in ~/.ssh/id_*; do
-
     if [ -f "$KEY_FILE.pub" ] && [ -f "$KEY_FILE" ] ; then
         FILENAME=$(basename "${KEY_FILE}")
         KEY=$(ssh-keygen -l -f "${KEY_FILE}")
-        info "$FILENAME: $KEY"
-    fi | sort
+        printf '%s: %s\n' "$FILENAME" "$KEY"
+    fi
+  done | sort | while IFS= read -r LINE; do
+    info "$LINE"
   done
 
   if [ -f "$SSH_KEY_DIR/id_rsa" ]; then
