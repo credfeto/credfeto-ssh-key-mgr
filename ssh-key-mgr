@@ -814,7 +814,7 @@ audit_ssh_keys() {
     die "Warning: default id_rsa key files exists"
   fi
   if [ -f "$SSH_KEY_DIR/id_ed25519" ]; then
-    info "Warning: default id_ed25519 key files exists"
+    info "Warning: default id_ed25519 key files exist"
   fi
 }
 
