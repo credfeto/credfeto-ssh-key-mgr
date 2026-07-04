@@ -332,5 +332,5 @@ teardown() {
     touch "$HOME/.ssh/id_ed25519"
     touch "$HOME/.ssh/id_ed25519.pub"
     run "$SCRIPT" audit
-    [[ "$output" =~ "Warning: default id_ed25519 key files exists" ]]
+    [[ "$output" =~ "Warning: default id_ed25519 key files exist" ]]
 }
