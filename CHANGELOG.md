@@ -10,6 +10,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 
 ## [Unreleased]
 ### Security
+- Pin GitHub Actions uses: references to commit SHA instead of tag (#41)
 ### Added
 - PKGBUILD for Arch Linux packaging via makepkg
 - upload subcommand to push an existing key to the key server with challenge-response authentication
