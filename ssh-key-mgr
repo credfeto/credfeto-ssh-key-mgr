@@ -132,6 +132,11 @@ warn() {
 # meaningful error instead of a bare "failed" message. Returns curl's own
 # exit code, which only reflects transport-level failures (DNS, TLS,
 # connection refused) since -f is deliberately not used.
+# Callers with a request body MUST pass it via --data-binary @<tempfile>,
+# never by piping into this function: `producer | http_request ...` runs
+# http_request as the last stage of a pipeline, which executes in a
+# subshell in sh/dash, so HTTP_STATUS/HTTP_BODY would be set there and
+# discarded instead of visible to the caller.
 http_request() {
     HTTP_RAW=$(curl -s -w '\n%{http_code}' "$@")
     HTTP_RC=$?
@@ -713,14 +718,17 @@ remove_from_key_server() {
   fi
 
   info "Removing key from $KEYS_SERVER_URL..."
-  if jq -n \
+  RMV_BODY_TMP=$(mktemp)
+  jq -n \
     --arg challenge "$RMV_CHALLENGE" \
     --arg signature "$RMV_SIGNATURE" \
-    '{"challenge":$challenge,"signature":$signature}' \
-    | http_request -X DELETE \
+    '{"challenge":$challenge,"signature":$signature}' > "$RMV_BODY_TMP"
+
+  if http_request -X DELETE \
         -H 'Content-Type: application/json' \
         "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID" \
-        --data-binary @-; then
+        --data-binary "@$RMV_BODY_TMP"; then
+    rm -f "$RMV_BODY_TMP"
     case "$HTTP_STATUS" in
       2??)
         rm -f "$RMV_KEY_ID_FILE"
@@ -731,6 +739,7 @@ remove_from_key_server() {
         ;;
     esac
   else
+    rm -f "$RMV_BODY_TMP"
     info "Warning: failed to reach key server at $KEYS_SERVER_URL to remove key for $RMV_HOST"
   fi
 }
@@ -803,12 +812,18 @@ upload_to_key_server() {
     --arg signature "$UPL_SIGNATURE" \
     '{"key":$key,"challenge":$challenge,"signature":$signature}')
 
-  if ! printf '%s' "$REQUEST_BODY" | http_request -X POST \
+  UPL_BODY_TMP=$(mktemp)
+  printf '%s' "$REQUEST_BODY" > "$UPL_BODY_TMP"
+
+  if ! http_request -X POST \
     -H 'Content-Type: application/json' \
     "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER" \
-    --data-binary @-; then
+    --data-binary "@$UPL_BODY_TMP"; then
+    rm -f "$UPL_BODY_TMP"
     die "Failed to reach key server at $KEYS_SERVER_URL to upload key for $UPL_KEY_HOST"
   fi
+  rm -f "$UPL_BODY_TMP"
+
   case "$HTTP_STATUS" in
     2??) ;;
     *) die "Failed to upload key to key server for $UPL_KEY_HOST (HTTP $HTTP_STATUS)$(http_error_suffix)" ;;
