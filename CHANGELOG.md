@@ -31,6 +31,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - import subcommand was copying the public key to the private key path
 - audit subcommand incorrectly exited non-zero when no default SSH key files existed
 - upload/rotate/revoke error messages now include the HTTP status code and response body from the key server instead of a bare failure message, making failures diagnosable without server log access
+- upload and remove now pass the request body to the key server via a temp file instead of piping into http_request; piping made http_request run as the last stage of a pipeline, which executes in a subshell in sh/dash, silently discarding the HTTP_STATUS/HTTP_BODY it set and leaving the caller with stale values from the previous request
 ### Changed
 - die() must output to stderr so error messages are not swallowed by stdout pipelines
 - Replaced bare echo/printf calls with die/success/info output helpers throughout script for consistent user-facing output
