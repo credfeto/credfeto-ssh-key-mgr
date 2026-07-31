@@ -127,6 +127,32 @@ warn() {
     printf '\n\033[33m!\033[0m %s\n' "$*" >&2
 }
 
+# Performs a curl request without -f, capturing the HTTP status code into
+# HTTP_STATUS and the response body into HTTP_BODY so callers can report a
+# meaningful error instead of a bare "failed" message. Returns curl's own
+# exit code, which only reflects transport-level failures (DNS, TLS,
+# connection refused) since -f is deliberately not used.
+# Callers with a request body MUST pass it via --data-binary @<tempfile>,
+# never by piping into this function: `producer | http_request ...` runs
+# http_request as the last stage of a pipeline, which executes in a
+# subshell in sh/dash, so HTTP_STATUS/HTTP_BODY would be set there and
+# discarded instead of visible to the caller.
+http_request() {
+    HTTP_RAW=$(curl -s -w '\n%{http_code}' "$@")
+    HTTP_RC=$?
+    HTTP_STATUS=$(printf '%s\n' "$HTTP_RAW" | tail -n 1)
+    HTTP_BODY=$(printf '%s\n' "$HTTP_RAW" | sed '$d')
+    return "$HTTP_RC"
+}
+
+# Formats HTTP_BODY (set by http_request) as a ": <body>" suffix for error
+# messages, or nothing if the body is empty.
+http_error_suffix() {
+    if [ -n "$HTTP_BODY" ]; then
+        printf ': %s' "$HTTP_BODY"
+    fi
+}
+
 example() {
     printf '   %s\n' "$*"
 }
@@ -654,8 +680,18 @@ remove_from_key_server() {
   RMV_KEY_ID=$(cat "$RMV_KEY_ID_FILE")
 
   info "Fetching delete challenge for $RMV_HOST/$RMV_USER..."
-  RMV_CHALLENGE_JSON=$(curl -sf "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID/challenge") \
-    || { info "Warning: failed to fetch delete challenge — skipping server removal"; return 0; }
+  if ! http_request "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID/challenge"; then
+    info "Warning: failed to reach key server at $KEYS_SERVER_URL — skipping server removal"
+    return 0
+  fi
+  case "$HTTP_STATUS" in
+    2??) ;;
+    *)
+      info "Warning: failed to fetch delete challenge (HTTP $HTTP_STATUS)$(http_error_suffix) — skipping server removal"
+      return 0
+      ;;
+  esac
+  RMV_CHALLENGE_JSON=$HTTP_BODY
 
   RMV_CHALLENGE=$(printf '%s' "$RMV_CHALLENGE_JSON" | jq -r '.challenge')
   RMV_NAMESPACE=$(printf '%s' "$RMV_CHALLENGE_JSON" | jq -r '.namespace')
@@ -682,18 +718,29 @@ remove_from_key_server() {
   fi
 
   info "Removing key from $KEYS_SERVER_URL..."
-  if jq -n \
+  RMV_BODY_TMP=$(mktemp)
+  jq -n \
     --arg challenge "$RMV_CHALLENGE" \
     --arg signature "$RMV_SIGNATURE" \
-    '{"challenge":$challenge,"signature":$signature}' \
-    | curl -sf -X DELETE \
+    '{"challenge":$challenge,"signature":$signature}' > "$RMV_BODY_TMP"
+
+  if http_request -X DELETE \
         -H 'Content-Type: application/json' \
         "$KEYS_SERVER_URL/keys/$RMV_HOST/$RMV_USER/$RMV_KEY_ID" \
-        --data-binary @- >/dev/null; then
-    rm -f "$RMV_KEY_ID_FILE"
-    success "Removed key for $RMV_HOST from key server"
+        --data-binary "@$RMV_BODY_TMP"; then
+    rm -f "$RMV_BODY_TMP"
+    case "$HTTP_STATUS" in
+      2??)
+        rm -f "$RMV_KEY_ID_FILE"
+        success "Removed key for $RMV_HOST from key server"
+        ;;
+      *)
+        info "Warning: failed to remove key from server for $RMV_HOST (HTTP $HTTP_STATUS)$(http_error_suffix)"
+        ;;
+    esac
   else
-    info "Warning: failed to remove key from server for $RMV_HOST"
+    rm -f "$RMV_BODY_TMP"
+    info "Warning: failed to reach key server at $KEYS_SERVER_URL to remove key for $RMV_HOST"
   fi
 }
 
@@ -726,8 +773,14 @@ upload_to_key_server() {
   esac
 
   info "Fetching add-challenge for $UPL_KEY_HOST/$UPL_REMOTE_USER..."
-  CHALLENGE_JSON=$(curl -sf "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER/add-challenge") \
-    || die "Failed to fetch challenge from $KEYS_SERVER_URL"
+  if ! http_request "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER/add-challenge"; then
+    die "Failed to reach key server at $KEYS_SERVER_URL"
+  fi
+  case "$HTTP_STATUS" in
+    2??) ;;
+    *) die "Failed to fetch challenge from $KEYS_SERVER_URL (HTTP $HTTP_STATUS)$(http_error_suffix)" ;;
+  esac
+  CHALLENGE_JSON=$HTTP_BODY
 
   UPL_CHALLENGE=$(printf '%s' "$CHALLENGE_JSON" | jq -r '.challenge')
   UPL_NAMESPACE=$(printf '%s' "$CHALLENGE_JSON" | jq -r '.namespace')
@@ -759,11 +812,23 @@ upload_to_key_server() {
     --arg signature "$UPL_SIGNATURE" \
     '{"key":$key,"challenge":$challenge,"signature":$signature}')
 
-  RESPONSE=$(printf '%s' "$REQUEST_BODY" | curl -sf -X POST \
+  UPL_BODY_TMP=$(mktemp)
+  printf '%s' "$REQUEST_BODY" > "$UPL_BODY_TMP"
+
+  if ! http_request -X POST \
     -H 'Content-Type: application/json' \
     "$KEYS_SERVER_URL/keys/$UPL_KEY_HOST/$UPL_REMOTE_USER" \
-    --data-binary @-) \
-    || die "Failed to upload key to key server for $UPL_KEY_HOST"
+    --data-binary "@$UPL_BODY_TMP"; then
+    rm -f "$UPL_BODY_TMP"
+    die "Failed to reach key server at $KEYS_SERVER_URL to upload key for $UPL_KEY_HOST"
+  fi
+  rm -f "$UPL_BODY_TMP"
+
+  case "$HTTP_STATUS" in
+    2??) ;;
+    *) die "Failed to upload key to key server for $UPL_KEY_HOST (HTTP $HTTP_STATUS)$(http_error_suffix)" ;;
+  esac
+  RESPONSE=$HTTP_BODY
 
   KEY_ID=$(printf '%s' "$RESPONSE" | jq -r '.keyId')
   if [ -z "$KEY_ID" ] || [ "$KEY_ID" = "null" ]; then
