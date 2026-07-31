@@ -30,6 +30,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - removed unused BASEDIR variable
 - import subcommand was copying the public key to the private key path
 - audit subcommand incorrectly exited non-zero when no default SSH key files existed
+- upload/rotate/revoke error messages now include the HTTP status code and response body from the key server instead of a bare failure message, making failures diagnosable without server log access
 ### Changed
 - die() must output to stderr so error messages are not swallowed by stdout pipelines
 - Replaced bare echo/printf calls with die/success/info output helpers throughout script for consistent user-facing output
