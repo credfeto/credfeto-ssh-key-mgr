@@ -267,8 +267,12 @@ create_ssh_key() {
   done
 
   [ -z "$HOST" ] && die "--host not specified"
-  [ -z "$COMMENT" ] && COMMENT="$HOST for $USER@$(hostname)"
-  [ -z "$COMMENT" ] && die "--comment not specified"
+  if [ -z "$COMMENT" ]; then
+    command -v hostnamectl >/dev/null 2>&1 || die "hostnamectl not found - specify --comment"
+    STATIC_HOSTNAME=$(hostnamectl --static) || die "hostnamectl --static failed"
+    [ -z "$STATIC_HOSTNAME" ] && die "No static hostname set - run hostnamectl set-hostname <name>, or specify --comment"
+    COMMENT="$HOST for $USER@$STATIC_HOSTNAME"
+  fi
 
   HOST_FILE_HOST=$(find_host_file "$HOST")
   [ -n "$HOST_FILE_HOST" ] && die "Host already has key"
