@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+BINARY_NAME="ssh-key-mgr"
+TARGET_DIR="/usr/local/bin"
+
+die() {
+    if [ -t 2 ]; then
+        printf '\n\033[31m✗\033[0m %s\n' "$*" >&2
+    else
+        printf '\n✗ %s\n' "$*" >&2
+    fi
+    exit 1
+}
+
+success() {
+    if [ -t 1 ]; then
+        printf '\n\033[32m✓\033[0m %s\n' "$*"
+    else
+        printf '\n✓ %s\n' "$*"
+    fi
+}
+
+info() {
+    if [ -t 1 ]; then
+        printf '\n\033[32m→\033[0m %s\n' "$*"
+    else
+        printf '\n→ %s\n' "$*"
+    fi
+}
+
+CDPATH=''
+REPO_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
+BINARY_PATH="${REPO_DIR}/${BINARY_NAME}"
+TARGET_PATH="${TARGET_DIR}/${BINARY_NAME}"
+
+[ -x "${BINARY_PATH}" ] || die "Binary not found or not executable: ${BINARY_PATH}"
+
+if [ -e "${TARGET_PATH}" ] && [ ! -L "${TARGET_PATH}" ]; then
+    die "${TARGET_PATH} already exists and is not a symlink; remove it manually before installing"
+fi
+
+info "Linking ${BINARY_PATH} -> ${TARGET_PATH} (requires sudo)"
+sudo ln -sf "${BINARY_PATH}" "${TARGET_PATH}"
+
+success "Installed ${BINARY_NAME} to ${TARGET_PATH}"
